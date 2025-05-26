@@ -10,6 +10,9 @@
 #include <ws2tcpip.h>
 #endif // WIN32
 #include <thread>
+#include <vector>
+#include <mutex>
+#include <algorithm>
 
 #ifdef WIN32
 void myerror(const char *msg) { fprintf(stderr, "%s %lu\n", msg, GetLastError()); }
@@ -72,15 +75,16 @@ struct Param
 	}
 } param;
 
-#include <vector>
-#include <mutex>
-#include <algorithm>
-
 static std::vector<int> clients;
 static std::mutex clients_mutex;
 
 void recvThread(int sd)
 {
+	{
+		std::lock_guard<std::mutex> lock(clients_mutex);
+		clients.push_back(sd);
+	}
+
 	printf("connected\n");
 	fflush(stdout);
 	static const int BUFSIZE = 65536;
@@ -114,7 +118,7 @@ void recvThread(int sd)
 			std::lock_guard<std::mutex> lock(clients_mutex);
 			for (int peer_sd : clients)
 			{
-				// 자신에게 재전송을 원치 않으면 다음 줄 주석 해제
+				// 자신에게 재전송을 원치 않을경우
 				// if (peer_sd == sd) continue;
 
 				ssize_t bres = ::send(peer_sd, buf, res, 0);
